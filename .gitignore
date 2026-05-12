@@ -1,0 +1,25 @@
+# Dependencies
+node_modules
+/dist
+
+# Environment variables
+.env
+
+# Storage
+/storage
+
+# IDE and System files
+.vscode
+.idea
+.DS_Store
+*.log
+npm-debug.log*
+
+# Prisma
+/prisma/*.db
+/prisma/*.db-journal
+
+# Docker
+# Docker files are usually committed, but can be ignored if desired
+# Dockerfile
+# docker-compose.yml

@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MODERATOR
+  EMPLOYEE
+}
+
+model User {
+  id        String        @id @default(uuid())
+  username  String        @unique
+  password  String
+  role      Role          @default(EMPLOYEE)
+  groups    GroupMember[]
+  recordings Recording[]
+  messages  Message[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  parentId    String?
+  parent      Group?        @relation("GroupHierarchy", fields: [parentId], references: [id])
+  children    Group[]       @relation("GroupHierarchy")
+  members     GroupMember[]
+  recordings  Recording[]
+  messages    Message[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  userId    String
+  groupId   String
+  user      User     @relation(fields: [userId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+  joinedAt  DateTime @default(now())
+
+  @@unique([userId, groupId])
+}
+
+model Recording {
+  id           String   @id @default(uuid())
+  groupId      String
+  userId       String
+  filePath     String
+  duration     Float?
+  transcription String?
+  analysis     Json?
+  group        Group    @relation(fields: [groupId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  groupId   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+  createdAt DateTime @default(now())
+}
