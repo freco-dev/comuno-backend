@@ -11,8 +11,6 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
       - ./storage:/usr/src/app/storage
 
   db:

@@ -9,58 +9,65 @@ datasource db {
 
 enum Role {
   ADMIN
-  MODERATOR
+  CEO
+  CFO
+  CIO
+  CTO
+  MANAGER
+  SELLER
+  CASHIER
+  WAREHOUSE_WORKER
   EMPLOYEE
 }
 
 model User {
-  id        String        @id @default(uuid())
-  username  String        @unique
-  password  String
-  role      Role          @default(EMPLOYEE)
-  groups    GroupMember[]
+  id         String      @id @default(uuid())
+  username   String      @unique
+  password   String
+  role       Role        @default(EMPLOYEE)
+  groupId    String?
+  group      Group?      @relation("GroupUsers", fields: [groupId], references: [id])
+  
+  // Moderator bo'lsa, u boshqaradigan guruhlar
+  managedGroups Group[]  @relation("GroupModerator")
+  
   recordings Recording[]
-  messages  Message[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  messages   Message[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 }
 
 model Group {
-  id          String        @id @default(uuid())
+  id          String      @id @default(uuid())
   name        String
   description String?
-  parentId    String?
-  parent      Group?        @relation("GroupHierarchy", fields: [parentId], references: [id])
-  children    Group[]       @relation("GroupHierarchy")
-  members     GroupMember[]
+  
+  // Guruh moderatori
+  moderatorId String?
+  moderator   User?       @relation("GroupModerator", fields: [moderatorId], references: [id])
+  
+  // Guruhdagi oddiy foydalanuvchilar
+  users       User[]      @relation("GroupUsers")
+  
   recordings  Recording[]
   messages    Message[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
-model GroupMember {
-  id        String   @id @default(uuid())
-  userId    String
-  groupId   String
-  user      User     @relation(fields: [userId], references: [id])
-  group     Group    @relation(fields: [groupId], references: [id])
-  joinedAt  DateTime @default(now())
-
-  @@unique([userId, groupId])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Recording {
-  id           String   @id @default(uuid())
-  groupId      String
-  userId       String
-  filePath     String
-  duration     Float?
+  id            String   @id @default(uuid())
+  groupId       String
+  userId        String
+  filePath      String
+  duration      Float?
+  startTime     DateTime @default(now())
+  endTime       DateTime @default(now())
   transcription String?
-  analysis     Json?
-  group        Group    @relation(fields: [groupId], references: [id])
-  user         User     @relation(fields: [userId], references: [id])
-  createdAt    DateTime @default(now())
+  analysis      Json?
+  group         Group    @relation(fields: [groupId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 model Message {

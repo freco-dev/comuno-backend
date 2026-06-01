@@ -14,7 +14,10 @@ import { VoiceService } from './voice.service';
 import { ChatService } from '../chat/chat.service';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: true,
+    credentials: true,
+  },
   namespace: 'voice',
 })
 export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -36,9 +39,9 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
-    this.voiceService.handleUserDisconnect(client, this.server);
+    await this.voiceService.handleUserDisconnect(client, this.server);
   }
 
   @UseGuards(WsJwtGuard)
@@ -77,17 +80,19 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       return { status: 'granted' };
     } else {
+      // Emit speakingDenied directly to the requester
+      client.emit('speakingDenied', { reason: 'Someone else is speaking' });
       return { status: 'denied', reason: 'Someone else is speaking' };
     }
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('stopSpeaking')
-  handleStopSpeaking(
+  async handleStopSpeaking(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { groupId: string },
   ) {
-    this.voiceService.stopSpeaking(data.groupId, client.data.user.id);
+    await this.voiceService.stopSpeaking(data.groupId, client.data.user.id);
     client.to(data.groupId).emit('userStoppedSpeaking', {
       userId: client.data.user.id,
     });
@@ -100,8 +105,12 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { groupId: string; buffer: Buffer },
   ) {
+    if (!data.buffer || data.buffer.length === 0) return;
+
     // Broadcast voice data to everyone in the room except the sender
-    client.to(data.groupId).emit('voiceStream', {
+    console.log(`Broadcasting voice data (${data.buffer.length} bytes) from ${client.data.user.username} to room ${data.groupId}`);
+    
+    this.server.to(data.groupId).emit('voiceData', {
       userId: client.data.user.id,
       buffer: data.buffer,
     });
@@ -121,6 +130,8 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.groupId,
       data.content,
     );
+    
+    console.log(`New message from ${client.data.user.username} in room ${data.groupId}`);
     
     // Broadcast message to everyone in the room
     this.server.to(data.groupId).emit('newMessage', message);
