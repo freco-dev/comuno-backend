@@ -2,21 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Socket, Server } from 'socket.io';
 import { UsersService } from '../users/users.service';
-import { RecordingsService } from '../recordings/recordings.service';
-
-interface RecordingSession {
-  userId: string;
-  buffers: Buffer[];
-  startTime: Date;
-}
 
 @Injectable()
 export class VoiceService {
   // Set of "groupId:userId" indicating active speakers
   private activeSpeakers = new Set<string>();
-  
-  // Map of "groupId:userId" -> RecordingSession
-  private recordingBuffers = new Map<string, RecordingSession>();
 
   constructor(
     private jwtService: JwtService,
@@ -41,10 +31,6 @@ export class VoiceService {
   async tryToSpeak(groupId: string, userId: string): Promise<boolean> {
     const key = `${groupId}:${userId}`;
     this.activeSpeakers.add(key);
-    
-    // Initialize recording buffer with start time
-    this.recordingBuffers.set(key, { userId, buffers: [], startTime: new Date() });
-    
     return true;
   }
 
@@ -52,21 +38,6 @@ export class VoiceService {
     const key = `${groupId}:${userId}`;
     if (this.activeSpeakers.has(key)) {
       this.activeSpeakers.delete(key);
-      
-      // Handle the end of recording session
-      const session = this.recordingBuffers.get(key);
-      if (session) {
-        await this.recordingsService.saveRecording(groupId, userId, session.buffers, session.startTime);
-        this.recordingBuffers.delete(key);
-      }
-    }
-  }
-
-  appendVoiceData(groupId: string, userId: string, buffer: Buffer) {
-    const key = `${groupId}:${userId}`;
-    const session = this.recordingBuffers.get(key);
-    if (session && session.userId === userId) {
-      session.buffers.push(buffer);
     }
   }
 
