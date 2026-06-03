@@ -1,15 +1,23 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as mediasoup from 'mediasoup';
-import { Worker, Router, WebRtcTransport, PlainTransport, Producer, Consumer, DtlsParameters, RtpCapabilities, RtpParameters } from 'mediasoup';
+import type { types as mediasoupTypes } from 'mediasoup';
 
 interface TransportMeta {
-  transport: WebRtcTransport;
+  transport: mediasoupTypes.WebRtcTransport;
   socketId: string;
   userId: string;
   groupId: string;
   direction: 'send' | 'recv';
 }
+
+type DtlsParameters = mediasoupTypes.DtlsParameters;
+type RtpCapabilities = mediasoupTypes.RtpCapabilities;
+type RtpParameters = mediasoupTypes.RtpParameters;
+type Producer = mediasoupTypes.Producer;
+type Consumer = mediasoupTypes.Consumer;
+type Router = mediasoupTypes.Router;
+type Worker = mediasoupTypes.Worker;
 
 @Injectable()
 export class MediasoupService implements OnModuleInit, OnModuleDestroy {
@@ -100,14 +108,14 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       direction,
     });
 
-    transport.on('dtlsstatechange', (dtlsState) => {
+    transport.on('dtlsstatechange', (dtlsState: string) => {
       if (dtlsState === 'closed') {
         this.logger.log(`Transport closed: ${transport.id}`);
         this.cleanupTransport(transport.id);
       }
     });
 
-    transport.on('close', () => {
+    transport.on('@close', () => {
       this.logger.log(`Transport closed event: ${transport.id}`);
       this.cleanupTransport(transport.id);
     });
@@ -145,7 +153,7 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       this.producers.delete(key);
     });
 
-    producer.on('close', () => {
+    producer.on('@close', () => {
       this.logger.log(`Producer closed: ${producer.id}`);
       this.producers.delete(key);
     });

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Socket, Server } from 'socket.io';
 import { UsersService } from '../users/users.service';
+import { RecordingsService } from '../recordings/recordings.service';
 
 @Injectable()
 export class VoiceService {
