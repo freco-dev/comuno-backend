@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { VoiceGateway } from './voice.gateway';
+import { VoiceController } from './voice.controller';
 import { VoiceService } from './voice.service';
-import { MediasoupService } from './mediasoup.service';
 import { UsersModule } from '../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +22,7 @@ import { WsJwtGuard } from './guards/ws-jwt.guard';
       }),
     }),
   ],
-  providers: [VoiceGateway, VoiceService, MediasoupService, WsJwtGuard],
+  controllers: [VoiceController],
+  providers: [VoiceGateway, VoiceService, WsJwtGuard],
 })
 export class VoiceModule {}

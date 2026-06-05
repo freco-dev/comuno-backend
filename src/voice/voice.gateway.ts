@@ -8,10 +8,9 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards, UnauthorizedException } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from './guards/ws-jwt.guard';
 import { VoiceService } from './voice.service';
-import { MediasoupService } from './mediasoup.service';
 import { ChatService } from '../chat/chat.service';
 
 @WebSocketGateway({
@@ -27,7 +26,6 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private voiceService: VoiceService,
-    private mediasoupService: MediasoupService,
     private chatService: ChatService,
   ) {}
 
@@ -43,7 +41,6 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
-    await this.mediasoupService.closeTransportsForSocket(client.id);
     await this.voiceService.handleUserDisconnect(client, this.server);
   }
 
@@ -103,86 +100,18 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @UseGuards(WsJwtGuard)
-  @SubscribeMessage('getRouterRtpCapabilities')
-  handleGetRouterRtpCapabilities(
+  @SubscribeMessage('voiceData')
+  handleVoiceData(
     @ConnectedSocket() client: Socket,
+    @MessageBody() data: { groupId: string; buffer: string },
   ) {
-    return this.mediasoupService.getRtpCapabilities();
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('createWebRtcTransport')
-  async handleCreateWebRtcTransport(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { groupId: string; direction: 'send' | 'recv' },
-  ) {
-    const transport = await this.mediasoupService.createWebRtcTransport(
-      client.id,
-      client.data.user.id,
-      data.groupId,
-      data.direction,
-    );
-    return transport;
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('connectTransport')
-  async handleConnectTransport(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { transportId: string; dtlsParameters: any },
-  ) {
-    await this.mediasoupService.connectTransport(data.transportId, data.dtlsParameters);
-    return { status: 'connected' };
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('produce')
-  async handleProduce(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { transportId: string; kind: 'audio' | 'video'; rtpParameters: any; groupId: string },
-  ) {
-    const result = await this.mediasoupService.produce(
-      data.transportId,
-      data.kind,
-      data.rtpParameters,
-      client.data.user.id,
-      data.groupId,
-    );
-
-    client.to(data.groupId).emit('userStartedSpeaking', {
+    client.to(data.groupId).emit('voiceData', {
       userId: client.data.user.id,
       username: client.data.user.username,
-      producerId: result.id,
+      buffer: data.buffer,
     });
 
-    return result;
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('consume')
-  async handleConsume(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { transportId: string; producerId: string; rtpCapabilities: any; groupId: string },
-  ) {
-    const consumer = await this.mediasoupService.consume(
-      data.transportId,
-      data.producerId,
-      data.rtpCapabilities,
-      client.data.user.id,
-    );
-
-    return consumer;
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('closeProducer')
-  async handleCloseProducer(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { groupId: string },
-  ) {
-    await this.mediasoupService.closeProducer(data.groupId, client.data.user.id);
-    client.to(data.groupId).emit('userStoppedSpeaking', { userId: client.data.user.id });
-    return { status: 'closed' };
+    return { status: 'sent' };
   }
 
   @UseGuards(WsJwtGuard)
