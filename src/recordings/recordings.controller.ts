@@ -1,9 +1,18 @@
-import { Controller, Get, Param, Query, UseGuards, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, UseGuards, StreamableFile } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RecordingsService } from './recordings.service';
+
+interface UploadRecordingBody {
+  recordingId: string;
+  groupId: string;
+  audioBase64: string;
+  mimeType?: string;
+  startTime: string;
+  endTime: string;
+}
 
 @ApiTags('Recordings')
 @ApiBearerAuth()
@@ -11,6 +20,31 @@ import { RecordingsService } from './recordings.service';
 @Controller('recordings')
 export class RecordingsController {
   constructor(private recordingsService: RecordingsService) {}
+
+  @Post('upload')
+  @ApiOperation({ summary: 'Upload a push-to-talk recording' })
+  async uploadRecording(
+    @Request() req,
+    @Body() data: UploadRecordingBody,
+  ) {
+    const recording = await this.recordingsService.saveUploadedRecording(
+      data.recordingId,
+      data.groupId,
+      req.user.id,
+      data.audioBase64,
+      data.mimeType,
+      data.startTime,
+      data.endTime,
+    );
+
+    return recording
+      ? {
+          ...recording,
+          fileUrl: `/uploads/${path.basename(recording.filePath)}`,
+          timestamp: recording.createdAt,
+        }
+      : { status: 'empty' };
+  }
 
   @Get(':groupId')
   @ApiOperation({ summary: 'Get recording history for a group' })

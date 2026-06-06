@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
@@ -28,7 +28,8 @@ export class RecordingsService {
     const tempFilePath = path.join(this.storagePath, `${recordingId}.raw`);
     const finalFilePath = path.join(this.storagePath, `${recordingId}.mp3`);
     const endTime = new Date();
-    const duration = (endTime.getTime() - startTime.getTime()) / 1000;
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const duration = durationMs / 1000;
 
     try {
       // Concatenate buffers
@@ -56,6 +57,7 @@ export class RecordingsService {
                 startTime,
                 endTime,
                 duration,
+                durationMs,
               },
             });
 
@@ -70,6 +72,117 @@ export class RecordingsService {
 
     } catch (error) {
       this.logger.error(`Failed to save recording: ${error.message}`);
+    }
+  }
+
+  async saveUploadedRecording(
+    recordingId: string,
+    groupId: string,
+    userId: string,
+    audioBase64: string,
+    mimeType = 'audio/mp4',
+    startTimeValue: string,
+    endTimeValue: string,
+  ) {
+    if (!/^[a-zA-Z0-9-]{16,80}$/.test(recordingId || '')) {
+      throw new BadRequestException('recordingId is invalid');
+    }
+    if (!groupId?.trim()) {
+      throw new BadRequestException('groupId is required');
+    }
+
+    const existingRecording = await this.prisma.recording.findUnique({
+      where: { id: recordingId },
+    });
+    if (existingRecording) {
+      if (existingRecording.userId !== userId || existingRecording.groupId !== groupId) {
+        throw new BadRequestException('recordingId is already in use');
+      }
+      return existingRecording;
+    }
+
+    const startTime = new Date(startTimeValue);
+    const endTime = new Date(endTimeValue);
+    if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(endTime.getTime())) {
+      throw new BadRequestException('startTime and endTime must be valid ISO dates');
+    }
+    if (endTime <= startTime) {
+      throw new BadRequestException('endTime must be after startTime');
+    }
+
+    const normalizedBase64 = audioBase64.includes(',') ? audioBase64.split(',').pop() || '' : audioBase64;
+    if (!normalizedBase64) {
+      throw new BadRequestException('audioBase64 is required');
+    }
+
+    const audioBuffer = Buffer.from(normalizedBase64, 'base64');
+    if (audioBuffer.length === 0) {
+      throw new BadRequestException('Audio payload is empty');
+    }
+    if (audioBuffer.length > 15 * 1024 * 1024) {
+      throw new BadRequestException('Audio segment exceeds the 15 MB limit');
+    }
+
+    const groupMembership = await this.prisma.group.findFirst({
+      where: {
+        id: groupId,
+        OR: [
+          { moderatorId: userId },
+          { users: { some: { id: userId } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!groupMembership) {
+      throw new NotFoundException('User is not a member of this group');
+    }
+
+    const extension = this.getExtensionForMimeType(mimeType);
+    const filename = `${recordingId}${extension}`;
+    const filePath = path.join(this.storagePath, filename);
+    const durationMs = endTime.getTime() - startTime.getTime();
+
+    try {
+      fs.writeFileSync(filePath, audioBuffer);
+
+      return this.prisma.recording.create({
+        data: {
+          id: recordingId,
+          groupId,
+          userId,
+          filePath: filename,
+          startTime,
+          endTime,
+          duration: durationMs / 1000,
+          durationMs,
+        },
+      });
+    } catch (error) {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      this.logger.error(`Failed to save uploaded recording: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private getExtensionForMimeType(mimeType: string) {
+    switch (mimeType.toLowerCase()) {
+      case 'audio/m4a':
+      case 'audio/mp4':
+      case 'audio/aac':
+        return '.m4a';
+      case 'audio/mpeg':
+      case 'audio/mp3':
+        return '.mp3';
+      case 'audio/webm':
+        return '.webm';
+      case 'audio/wav':
+      case 'audio/wave':
+      case 'audio/x-wav':
+        return '.wav';
+      default:
+        return '.m4a';
     }
   }
 

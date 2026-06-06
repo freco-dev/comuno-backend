@@ -61,6 +61,7 @@ model Recording {
   userId        String
   filePath      String
   duration      Float?
+  durationMs    Int?
   startTime     DateTime @default(now())
   endTime       DateTime @default(now())
   transcription String?
@@ -68,6 +69,9 @@ model Recording {
   group         Group    @relation(fields: [groupId], references: [id])
   user          User     @relation(fields: [userId], references: [id])
   createdAt     DateTime @default(now())
+
+  @@index([groupId, startTime])
+  @@index([userId, startTime])
 }
 
 model Message {
